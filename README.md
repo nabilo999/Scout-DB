@@ -1,4 +1,4 @@
-# ScoutIQ
+# Scout DB
 
 ScoutIQ is a football scouting decision-support prototype. It helps a recruitment team answer three related questions about a player:
 
