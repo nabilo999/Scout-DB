@@ -20,24 +20,6 @@ The three parts share one player-performance foundation, but answer different qu
 | Historical similarity and potential | What happened to comparable players after a similar season? | Earlier player-seasons, age, position, minutes and performance features, followed by later seasons | Comparable historical players, their subsequent development and an evidence-based potential estimate |
 | Team fit | Which clubs' playing profiles appear compatible with this player? | Big Five player-season data aggregated by club, plus 2024–25 match results and available match statistics | Team-style profiles, fit comparisons and a shortlist of clubs to investigate |
 
-The shared sequence is:
-
-```text
-Season source data
-       |
-       v
-Validated player-season records and features
-       |----------------------|
-       v                      v
-Current ability       Historical similarity
-                              |
-                              v
-                         Potential
-
-Validated 2024–25 team inputs --> Team profiles --> Team fit
-                                             player profile --^
-```
-
 ## How the three parts work
 
 ### Current ability
