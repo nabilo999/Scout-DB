@@ -98,6 +98,10 @@ def load_teams(path=TEAMS_FILE):
 
 def load_players(path=PLAYERS_FILE):
     players = pd.read_csv(path)
+    # Some player-league-seasons appear twice, differing only in merge diagnostics.
+    players = (players.sort_values("match_score", ascending=False)
+               .drop_duplicates(["understat_player_id", "league", "season"])
+               .sort_index())
     players["role"] = players["tm_sub_position"].map(ROLE_OF_SUB_POSITION)
     players["season_start"] = players["season"].str[:4].astype(int)
     players = add_role_scores(players)
@@ -105,9 +109,12 @@ def load_players(path=PLAYERS_FILE):
 
 
 def add_role_scores(players):
-    """z-score each role metric per 90 within role and season, then combine."""
+    """z-score each role metric per 90 within role and season, then combine.
+    The clipped z-scores are kept as z_<metric> (the player's profile)."""
     players = players.copy()
     players["role_score"] = np.nan
+    for metric in {m for metrics in ROLE_METRICS.values() for m in metrics}:
+        players["z_" + metric] = np.nan
     per90 = players["minutes"].clip(lower=1) / 90
     for role, metrics in ROLE_METRICS.items():
         in_role = players["role"] == role
@@ -118,7 +125,9 @@ def add_role_scores(players):
             seasons = players.loc[in_role, "season"]
             mean = ref.groupby(seasons[ref.index]).mean().reindex(seasons).to_numpy()
             std = ref.groupby(seasons[ref.index]).std().reindex(seasons).to_numpy()
-            score += weight * ((rate - mean) / std).clip(-3, 3)
+            z = ((rate - mean) / std).clip(-3, 3)
+            players.loc[in_role, "z_" + metric] = z
+            score += weight * z
         players.loc[in_role, "role_score"] = score
     return players
 
