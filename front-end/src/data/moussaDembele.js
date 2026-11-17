@@ -164,29 +164,6 @@ export const moussaDembele = {
           86
         ]
       ]
-    },
-    {
-      "title": "Goalkeeping",
-      "rows": [
-        [
-          "GK Diving",
-          10,
-          "GK Handling",
-          8
-        ],
-        [
-          "GK Kicking",
-          12,
-          "GK Reflexes",
-          9
-        ],
-        [
-          "GK Positioning",
-          7,
-          null,
-          null
-        ]
-      ]
     }
   ],
   "projections": [

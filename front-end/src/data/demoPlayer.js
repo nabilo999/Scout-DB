@@ -55,14 +55,6 @@ export const demoPlayer = {
         ["Curve", 95, "Penalties", 70],
       ],
     },
-    {
-      title: "Goalkeeping",
-      rows: [
-        ["GK Diving", 11, "GK Handling", 13],
-        ["GK Kicking", 5, "GK Reflexes", 8],
-        ["GK Positioning", 13, null, null],
-      ],
-    },
   ],
   projections: [
     ["Projected Appearances", "34"],

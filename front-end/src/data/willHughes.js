@@ -164,29 +164,6 @@ export const willHughes = {
           50
         ]
       ]
-    },
-    {
-      "title": "Goalkeeping",
-      "rows": [
-        [
-          "GK Diving",
-          8,
-          "GK Handling",
-          11
-        ],
-        [
-          "GK Kicking",
-          9,
-          "GK Reflexes",
-          10
-        ],
-        [
-          "GK Positioning",
-          6,
-          null,
-          null
-        ]
-      ]
     }
   ],
   "projections": [
