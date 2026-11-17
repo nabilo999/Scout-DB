@@ -27,7 +27,6 @@ PLAYER_NAMES = sorted(names.dropna().astype(str).drop_duplicates().tolist(), key
 class ReportRequest(BaseModel):
     player_name: str
 
-
 @app.get("/api/players")
 def search_players(q: str = Query(default="", max_length=80)):
     query = q.strip().casefold()
