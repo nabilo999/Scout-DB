@@ -130,6 +130,15 @@ def new_regressor():
     return make_pipeline(StandardScaler(), Ridge(alpha=1.0))
 
 
+def upgrade_order(clubs):
+    """Upgrade clubs (vs_current > 0) by projected, then the rest by vs_current
+    (clubs with no regular in the role last)."""
+    group = np.where(clubs["vs_current"] > 0, 0, np.where(clubs["vs_current"].notna(), 1, 2))
+    key = np.where(group == 0, -clubs["projected"], -clubs["vs_current"].fillna(0))
+    return (clubs.assign(upgrade=group == 0, _group=group, _key=key)
+            .sort_values(["_group", "_key"]).drop(columns=["_group", "_key"]).reset_index(drop=True))
+
+
 # ---------------------------------------------------------------- model
 
 class DevelopmentModel:
@@ -324,16 +333,24 @@ class DevelopmentModel:
                    "projected", "vs_current", "develop", "blueprint", "plays_like", "evidence"]
         return club_row, blueprint_text, out[columns]
 
-    def best_current(self, club_row, role):
+    def best_current(self, club_row, role, exclude_id=None):
         """Highest role score among the club's regulars (900+ minutes) in this role."""
         season_players = self.players[(self.players["season"] == club_row["season"])
                                       & (self.players["role"] == role)]
         stints = club_stints(season_players)
-        regulars = stints[(stints["team"] == club_row["team"]) & (stints["club_minutes"] >= REGULAR_MINUTES)]
+        regulars = stints[(stints["team"] == club_row["team"]) & (stints["club_minutes"] >= REGULAR_MINUTES)
+                          & (stints["understat_player_id"] != exclude_id)]
         return regulars["role_score"].max() if not regulars.empty else np.nan
 
-    def club_ranking(self, player_id, season=None):
-        """Every club in the player's season, ranked by his projected score there."""
+    def club_ranking(self, player_id, season=None, target_season=None):
+        """Every club in `target_season` (default: the player's season).
+
+        Clubs where he would be an upgrade (vs_current > 0: his projected score
+        beats the club's best current regular in his role) come first, ranked
+        by projected score. Then the rest, ranked by vs_current. Ranking by
+        projected alone puts the strongest clubs first for everyone, because
+        every player's numbers rise there; ranking by vs_current alone favours
+        clubs that are weak in his position."""
         rows = self.seasons[self.seasons["understat_player_id"] == player_id]
         if season is not None:
             rows = rows[rows["season"] <= season]
@@ -343,7 +360,9 @@ class DevelopmentModel:
         if player["role"] not in ROLE_METRICS or pd.isna(player["role_score"]):
             raise ValueError("%s has no role score (%s), so there is nothing to predict"
                              % (player["player"], player["tm_sub_position"]))
-        clubs = self.teams[self.teams["season"] == player["season"]]
+        clubs = self.teams[self.teams["season"] == (target_season or player["season"])]
+        if clubs.empty:
+            raise ValueError("No team data for season %s" % target_season)
         one = pd.DataFrame([player])
         near = self.lookalikes(player)
         out = []
@@ -352,8 +371,10 @@ class DevelopmentModel:
                 continue
             scored, _ = self.score(one, club_row, player["role"])
             r = scored.iloc[0]
+            best = self.best_current(club_row, player["role"], exclude_id=player_id)
             out.append({"team": club_row["team"], "league": club_row["league"],
-                        "projected": r["projected"], "develop": r["develop"],
+                        "projected": r["projected"], "vs_current": r["projected"] - best,
+                        "develop": r["develop"],
                         "blueprint": r["blueprint"], "plays_like": r["plays_like"],
                         "evidence": self.evidence(near, club_row)})
-        return pd.DataFrame(out).sort_values("projected", ascending=False).reset_index(drop=True)
+        return upgrade_order(pd.DataFrame(out))

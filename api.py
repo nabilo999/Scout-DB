@@ -1,6 +1,7 @@
 """Small local API that lets the React page call the Python scouting model."""
 
 from pathlib import Path
+from typing import Optional
 
 import matplotlib
 matplotlib.use("Agg")
@@ -26,6 +27,10 @@ PLAYER_NAMES = sorted(names.dropna().astype(str).drop_duplicates().tolist(), key
 
 class ReportRequest(BaseModel):
     player_name: str
+    # Set when the report's warning says the latest season has too few minutes.
+    use_regular_season: bool = False
+    # Set when several players share the requested name.
+    player_id: Optional[int] = None
 
 @app.get("/api/players")
 def search_players(q: str = Query(default="", max_length=80)):
@@ -42,6 +47,8 @@ def create_report(request: ReportRequest):
             request.player_name,
             show_graph=False,
             return_report=True,
+            use_regular_season=request.use_regular_season,
+            player_id=request.player_id,
         )
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

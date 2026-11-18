@@ -44,6 +44,7 @@ SEASON_DECAY = 0.6
 
 MIN_MINUTES_REFERENCE = 450  # minimum minutes to be part of a role's z-score reference
 MIN_ROLE_MINUTES = 900  # below this a club "barely uses" the role and need is neutral
+REGULAR_SEASON_MINUTES = 900  # below this a player's season is too small to rely on
 
 ROLE_OF_SUB_POSITION = {
     "Goalkeeper": "GK",
@@ -201,7 +202,9 @@ def find_player(players, name=None, player_id=None):
         if player_id not in set(players["understat_player_id"]):
             raise ValueError("No player with understat_player_id %s" % player_id)
         return player_id
-    query = normalise(name)
+    query = normalise(name or "")
+    if not query:
+        raise ValueError("Give a player name (it can't be blank)")
     names = players[["understat_player_id", "player"]].drop_duplicates()
     names = names.assign(key=names["player"].map(normalise))
     exact = names[names["key"] == query]
@@ -216,6 +219,30 @@ def find_player(players, name=None, player_id=None):
                             for pid, r in options.iterrows())
         raise ValueError("Several players match %r, pick one:\n%s" % (name, listing))
     return int(ids[0])
+
+
+def season_minutes(players, player_id, season=None):
+    """Total league minutes per season for a player (all leagues that season),
+    up to and including `season`, oldest first."""
+    rows = players[players["understat_player_id"] == player_id]
+    if season is not None:
+        rows = rows[rows["season"] <= season]
+    return rows.groupby("season")["minutes"].sum().sort_index()
+
+
+def check_minutes(players, player_id, season=None):
+    """Whether the player's reference season (his latest up to `season`) has
+    enough minutes, and his latest season that does.
+
+    Returns (reference season, its minutes, latest regular season or None,
+    that season's minutes or None)."""
+    minutes = season_minutes(players, player_id, season)
+    if minutes.empty:
+        raise ValueError("Player has no seasons up to %s" % season)
+    regular = minutes[minutes >= REGULAR_SEASON_MINUTES]
+    return (minutes.index[-1], int(minutes.iloc[-1]),
+            regular.index[-1] if not regular.empty else None,
+            int(regular.iloc[-1]) if not regular.empty else None)
 
 
 def player_context(player_id, players, teams, season=None):

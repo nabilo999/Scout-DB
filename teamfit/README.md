@@ -11,9 +11,12 @@ python3 -m teamfit --club "Como" --role ST --top 20 --csv como.csv
 python3 -m teamfit "Bukayo Saka"                                   # clubs for a player, style fit
 python3 -m teamfit "Bukayo Saka" --development                     # ... ranked by projected score
 python3 -m teamfit "Florian Wirtz" --season 2024-25 --leagues EPL ESP --top 5
+python3 -m teamfit "Sergio Aguero" --regular-season               # latest season under 900 min? use his last full one
 python3 -m teamfit --evaluate                                      # test the models
 python3 -m teamfit --team-styles team_styles.csv --target-season 2025-26
 ```
+
+**Small seasons.** If a player's latest season has under 900 minutes, the player view prints a warning, because per-90 numbers from a small sample are unreliable. The warning names his latest season with 900+ minutes. `--regular-season` switches to that season, and adding `--target-season 2025-26` compares him with today's clubs rather than the clubs of that season. If he has no 900-minute season at all, the warning says the results are unreliable. Club shortlists already include only players with 900+ minutes.
 
 Roles for `--club`: `CB FB DM CM AM W ST`. Needs Python 3.9+ with pandas, numpy and scikit-learn (`pip install -r requirements.txt`). If a name matches several players or clubs, the tool lists the options.
 
@@ -89,7 +92,7 @@ The shortlist covers every player in that role with 900+ minutes in the latest s
 - `vs_current`: his projected score minus the best current role score among the club's regulars in that position;
 - `evidence`: from the 80 historical player-seasons closest to his per-90 profile, age and minutes (the same KNN idea as `nearest_neighbors.py`), how many of the 20 whose next club was most like this one improved.
 
-**Player → clubs** (`"Name" --development`) adds `projected`, `develop`, `blueprint`, `plays_like` and `evidence` to the club ranking and sorts by `projected`. The rule-based score is shown as `style_fit`.
+**Player → clubs** (`"Name" --development`) adds `projected`, `vs_current`, `upgrade`, `develop`, `blueprint`, `plays_like` and `evidence` to the club ranking. `vs_current` is his projected score at the club minus the club's best current regular in his role. Clubs where he would be an upgrade (`vs_current` > 0) come first, ranked by `projected`; the rest follow, ranked by `vs_current`. This was tested on 150 random players against two simpler orders. Ranking by `projected` alone made Bayern or PSG the #1 club for every player, and 95% of those #1 picks were clubs where he would not be an upgrade. Ranking by `vs_current` alone favoured clubs that are weak in his position: 49% of #1 picks were clubs where he would be below average. The combined order gets that to 12% and 0%, with 17 different #1 clubs. It still leans towards strong clubs (76% of top-3 picks come from the strongest third), but only ones where he would improve the team. Clubs with no regular in his role (for example, no wingers in a 3-5-2) have a blank `vs_current` and come last. The rule-based score is shown as `style_fit`.
 
 The fitted model is cached in `teamfit/.cache/`. It is rebuilt automatically (about 15 s) when the data files or the code change.
 

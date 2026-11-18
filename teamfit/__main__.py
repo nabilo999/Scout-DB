@@ -3,8 +3,9 @@
     python3 -m teamfit --club Arsenal --role W                  # shortlist for a club
     python3 -m teamfit --club "Como" --role ST --top 20 --csv como_st.csv
     python3 -m teamfit "Bukayo Saka"                            # clubs for a player (style fit)
-    python3 -m teamfit "Bukayo Saka" --development              # ... plus projected score, blueprint, develop
+    python3 -m teamfit "Bukayo Saka" --development              # ... ML view: upgrade clubs first, by projected score
     python3 -m teamfit "Florian Wirtz" --season 2024-25 --leagues EPL ESP --top 5
+    python3 -m teamfit "Sergio Aguero" --regular-season       # skip a latest season under 900 min
     python3 -m teamfit --evaluate                               # test the development model
     python3 -m teamfit --team-styles team_styles_2025-26.csv --target-season 2025-26
 
@@ -17,7 +18,7 @@ import sys
 import pandas as pd
 
 from . import teamfit
-from .development import DevelopmentModel
+from .development import DevelopmentModel, upgrade_order
 
 
 def main(argv=None):
@@ -31,6 +32,9 @@ def main(argv=None):
     parser.add_argument("--evaluate", action="store_true", help="test the development model and exit")
     parser.add_argument("--season", help="player's reference season, e.g. 2024-25 (default: his latest); "
                                          "with --club, the season of the shortlist (default: latest)")
+    parser.add_argument("--regular-season", action="store_true",
+                        help="if the player's latest season has under 900 minutes, use his latest season "
+                             "with 900+ minutes instead")
     parser.add_argument("--target-season", help="season of club profiles to compare against (default: reference season)")
     parser.add_argument("--leagues", nargs="+", choices=["EPL", "ESP", "GER", "ITA", "FRA"])
     parser.add_argument("--top", type=int, default=10)
@@ -93,13 +97,18 @@ def club_shortlist(model, args):
 
 def player_clubs(players, teams, args):
     player_id = teamfit.find_player(players, args.player, args.id)
-    ctx, ranking = teamfit.rank_clubs(player_id, players, teams, args.season,
+    season = minutes_check(players, player_id, args)
+    ctx, ranking = teamfit.rank_clubs(player_id, players, teams, season,
                                       args.target_season, args.leagues, args.include_current)
     if args.development:
-        dev = DevelopmentModel.cached(players, teams).club_ranking(player_id, ctx["season"])
+        dev = DevelopmentModel.cached(players, teams).club_ranking(player_id, ctx["season"], args.target_season)
         ranking = (ranking.drop(columns="why").rename(columns={"fit": "style_fit"})
-                   .merge(dev, on=["team", "league"], how="inner")
-                   .sort_values("projected", ascending=False).reset_index(drop=True))
+                   .merge(dev, on=["team", "league"], how="inner"))
+        ranking = upgrade_order(ranking)
+        print("Clubs where he would be an upgrade (vs_current > 0: his projected score beats their best current "
+              "%s) come first, ranked by projected score; then the rest, ranked by vs_current. "
+              "Blank vs_current = the club has no regular in that role.\n"
+              % teamfit.ROLE_NAMES.get(ctx["role"], "player"))
 
     score = "n/a" if ctx["role_score"] is None else "%+.2f" % ctx["role_score"]
     print("%s | %s %s | %s (%s) | %d min | role score %s"
@@ -110,6 +119,30 @@ def player_clubs(players, teams, args):
     print()
     show(ranking.drop(columns=["managers"]), args)
     return 0
+
+
+def minutes_check(players, player_id, args):
+    """Warn when the reference season is too small to rely on and, with
+    --regular-season, switch to the latest season with enough minutes.
+    Returns the season to use."""
+    season, minutes, regular, regular_minutes = teamfit.check_minutes(players, player_id, args.season)
+    if minutes >= teamfit.REGULAR_SEASON_MINUTES:
+        return season
+    name = players.loc[players["understat_player_id"] == player_id, "player"].iloc[-1]
+    small = "%s played only %d minutes in %s (under %d)" % (name, minutes, season, teamfit.REGULAR_SEASON_MINUTES)
+    if regular is None:
+        print("WARNING: %s and has no season with %d+ minutes, so these results are unreliable.\n"
+              % (small, teamfit.REGULAR_SEASON_MINUTES))
+        return season
+    if args.regular_season:
+        print("Using %s (%d min), his latest season with %d+ minutes, because %s.\n"
+              % (regular, regular_minutes, teamfit.REGULAR_SEASON_MINUTES, small))
+        return regular
+    print("WARNING: %s, so his numbers there are unreliable.\n"
+          "         His latest season with %d+ minutes is %s (%d min). "
+          "Add --regular-season to use it instead.\n"
+          % (small, teamfit.REGULAR_SEASON_MINUTES, regular, regular_minutes))
+    return season
 
 
 def show(ranking, args):
